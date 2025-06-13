@@ -7,8 +7,8 @@ import numpy as np
 from PIL import Image
 import os
 import cv2
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-import pandas as pd # Import pandas for chart data
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, VideoProcessorBase, WebRtcMode
+import pandas as pd
 
 
 # Define image size (should match the size used during training)
@@ -43,6 +43,7 @@ if model is not None:
     input_shape = model.input_shape[1:4] if model and hasattr(model, 'input_shape') and len(model.input_shape) > 3 else (IMG_SIZE, IMG_SIZE, 3)
     st.write(f"Expected input shape for the model: {input_shape}")
 
+
     def process_image(image):
         img = image.resize((input_shape[0], input_shape[1]))
         img_array = img_to_array(img)
@@ -58,12 +59,19 @@ if model is not None:
         if predictions is None or len(predictions) == 0:
             return "N/A", 0.0
 
+        # Ensure the number of class names matches the number of predictions
         if len(class_names) != predictions.shape[-1]:
              st.warning(f"Mismatch between number of defined CLASS_NAMES ({len(class_names)}) and model outputs ({predictions.shape[-1]}). Please update CLASS_NAMES.")
-             predicted_class_index = np.argmax(predictions)
-             predicted_probability = predictions[0][predicted_class_index]
-             return f"Class {predicted_class_index}", predicted_probability
+             # Attempt to provide a generic interpretation based on model output shape
+             if predictions.shape[-1] > 0:
+                 predicted_class_index = np.argmax(predictions)
+                 predicted_probability = predictions[0][predicted_class_index]
+                 return f"Class {predicted_class_index}", predicted_probability
+             else:
+                 return "N/A", 0.0
 
+
+        # Find the class with the highest probability
         predicted_class_index = np.argmax(predictions)
         predicted_probability = predictions[0][predicted_class_index]
         predicted_class_name = class_names[predicted_class_index]
@@ -74,7 +82,7 @@ if model is not None:
     # Example:
     # CLASS_NAMES = ['Good', 'Head Scratch', 'Thread Scratch', 'Neck Scratch', ...]
     # Replace with your actual class names from Teachable Machine
-    CLASS_NAMES = ['Good', 'manipulated_front', 'scratch_head', 'scratch_neck', 'thread_side', 'thread_top'] # <<< UPDATE THIS LIST AS PER NEED 
+    CLASS_NAMES = ['Good', 'manipulated_front', 'scratch_head', 'scratch_neck', 'thread_side', 'thread_top']# <<< UPDATE THIS LIST AS PER NEED 
 
     # Check if the user has updated the default class names and display a warning if not
     if CLASS_NAMES == ['Class 1 (Good)', 'Class 2 (Anomaly Type 1)', 'Class 3 (Anomaly Type 2)']:
@@ -97,11 +105,11 @@ if model is not None:
 
         st.write("Probabilities per class:")
         # Display raw probabilities as a bar chart if CLASS_NAMES match model output shape
-        if len(class_names) == predictions.shape[-1]:
+        if len(class_names) == predictions.shape[-1] and predictions.shape[-1] > 0:
             # Create a pandas DataFrame for the chart
             chart_data = pd.DataFrame({
                 'Class': class_names,
-                'Probability': predictions[0]
+                'Probability': predictions[0].tolist() # Ensure probabilities are a list
             })
             # Sort by probability for better visualization
             chart_data = chart_data.sort_values(by='Probability', ascending=False)
@@ -109,9 +117,10 @@ if model is not None:
             # Display as a horizontal bar chart
             st.bar_chart(chart_data.set_index('Class'))
         else:
-            st.write("Cannot display probability chart with mismatched CLASS_NAMES.")
-            st.write("Raw Predictions (Probabilities per class):")
-            st.json(predictions[0].tolist()) # Display as list if mismatch
+            st.write("Cannot display probability chart with mismatched CLASS_NAMES or no predictions.")
+            if predictions is not None and len(predictions) > 0:
+                 st.write("Raw Predictions (Probabilities per class):")
+                 st.json(predictions[0].tolist()) # Display as list if mismatch
 
 
     if option == "Upload Image":
@@ -141,28 +150,71 @@ if model is not None:
     elif option == "Webcam":
         st.subheader("Real-time Anomaly Detection (Webcam)")
 
+        # Create columns for side-by-side layout for webcam
+        col1_webcam, col2_webcam = st.columns(2)
+
+        with col1_webcam:
+             st.write("Live Video Feed:") # Title for the video column
+             # Placeholder for the webcam stream
+
+        with col2_webcam:
+             st.write("Prediction Results (Text Overlay on Video):") # Title for the results column
+             # Dynamic results display in a separate column is advanced.
+             # We'll rely on the text overlay in the video feed for real-time feedback.
+
+
         class VideoTransformer(VideoTransformerBase):
             def transform(self, frame):
-                img = frame.to_ndarray(format="bgr24")
-                img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-                img_array = process_image(img_pil)
+                img = frame.to_ndarray(format="bgr24") # Frame is in BGR format as a numpy array
+
+                # Convert BGR to RGB for model input
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+                # Convert to PIL Image for consistent preprocessing
+                img_pil = Image.fromarray(img_rgb)
+
+                # Preprocess the frame for the model
+                img_array = process_image(img_pil) # process_image handles resize, to_array, normalization
+
+                # Perform prediction
                 predictions = predict_anomaly(img_array)
+
+                # Interpret prediction
                 predicted_class, predicted_probability = interpret_tm_prediction(predictions, CLASS_NAMES)
 
-                display_img = img
+                # Prepare the frame for display (Overlaying text)
+                display_img = img # Use original BGR frame for displaying with cv2
+
                 score_text = f"Class: {predicted_class} ({predicted_probability:.2f})"
+
+                # Determine text color based on prediction (Green for Good, Red for Anomaly classes)
+                # This logic assumes 'Good' is the first class name in CLASS_NAMES
                 color = (0, 255, 0) if predicted_class == CLASS_NAMES[0] and predicted_class != "N/A" else (0, 0, 255)
-                cv2.putText(display_img, score_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
-                # You could potentially display the bar chart in the Streamlit app itself
-                # but displaying complex Streamlit elements within the VideoTransformer is tricky.
-                # For simplicity, we overlay text on the video feed.
+                # Put text on the frame
+                cv2.putText(display_img, score_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2, cv2.LINE_AA)
 
+                # The transform method must return a numpy array, typically in BGR format for cv2 to display
+                # Since display_img is the original BGR frame with text overlay, we return it directly.
                 return display_img
 
+
         if model is not None:
-             webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
+             # Pass the columns to webrtc_streamer to control where the video appears
+             # The video feed will be placed in the context of col1_webcam
+             with col1_webcam:
+                  webrtc_streamer(key="webcam_stream", video_transformer_factory=VideoTransformer, mode=WebRtcMode.SENDONLY,
+                                 # Adding rtc_configuration to potentially help with connection/codec issues
+                                 rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+                                )
+
+
              st.info("Select 'Webcam' from the sidebar to use your camera.")
+             # Add a note about updating CLASS_NAMES for correct interpretation
+             if CLASS_NAMES == ['Class 1 (Good)', 'Class 2 (Anomaly Type 1)', 'Class 3 (Anomaly Type 2)']:
+                 st.warning("Remember to update the CLASS_NAMES list in your app.py file for correct anomaly detection logic based on your trained classes.")
+
+
         else:
              st.warning("Model could not be loaded. Cannot start webcam.")
 
