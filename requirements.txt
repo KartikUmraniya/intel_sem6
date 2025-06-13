@@ -3,3 +3,4 @@ tensorflow<2.17
 opencv-python
 Pillow
 streamlit-webrtc
+tensorflowjs
