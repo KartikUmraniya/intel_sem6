@@ -35,7 +35,7 @@ model = get_model()
 
 # Only proceed if the model was loaded successfully
 if model is not None:
-    st.title("Anomaly Detection with Teachable Machine Model")
+    st.title(" Screw Anomaly Detection with Teachable Machine Model")
 
     st.sidebar.header("Upload Image or Use Webcam")
     option = st.sidebar.radio("Choose Input Source:", ("Upload Image", "Webcam"))
