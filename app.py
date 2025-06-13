@@ -111,7 +111,7 @@ if model is not None:
     # Example:
     # CLASS_NAMES = ['Good', 'Head Scratch', 'Thread Scratch', 'Neck Scratch', ...]
     # Replace with your actual class names from Teachable Machine
-    CLASS_NAMES = ['Class 1 (Good)', 'Class 2 (Anomaly Type 1)', 'Class 3 (Anomaly Type 2)'] # <<< UPDATE THIS LIST
+    CLASS_NAMES = ['Good', 'manipulated_front', 'scratch_head', 'scratch_neck', 'thread_side', 'thread_top']# <<< UPDATE THIS LIST AS PER NEED 
 
     # Check if the user has updated the default class names and display a warning if not
     if CLASS_NAMES == ['Class 1 (Good)', 'Class 2 (Anomaly Type 1)', 'Class 3 (Anomaly Type 2)']:
@@ -125,7 +125,12 @@ if model is not None:
             try:
                 # Display the uploaded image
                 image = Image.open(uploaded_file).convert('RGB') # Ensure RGB
-                st.image(image, caption="Uploaded Image", use_column_width=True)
+
+                # Create columns for side-by-side layout
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.image(image, caption="Uploaded Image", use_column_width=True)
 
                 # Preprocess the image
                 img_array = process_image(image)
@@ -136,24 +141,25 @@ if model is not None:
                 # Interpret and display results
                 predicted_class, predicted_probability = interpret_tm_prediction(predictions, CLASS_NAMES)
 
-                st.subheader("Prediction Results")
-                st.write(f"Predicted Class: **{predicted_class}**")
-                st.write(f"Confidence: **{predicted_probability:.4f}**")
+                with col2:
+                    st.subheader("Prediction Results")
+                    st.write(f"Predicted Class: **{predicted_class}**")
+                    st.write(f"Confidence: **{predicted_probability:.4f}**")
 
-                # You can add conditional logic here based on predicted_class_name
-                # For example, if predicted_class_name is one of your anomaly classes:
-                # This logic assumes 'Good' is the first class name in CLASS_NAMES
-                if predicted_class != CLASS_NAMES[0]: # Assuming first class is 'Good'
-                     st.error("Anomaly Detected!")
-                else:
-                     st.success("No Anomaly Detected")
+                    # You can add conditional logic here based on predicted_class_name
+                    # For example, if predicted_class_name is one of your anomaly classes:
+                    # This logic assumes 'Good' is the first class name in CLASS_NAMES
+                    if predicted_class != CLASS_NAMES[0]: # Assuming first class is 'Good'
+                         st.error("Anomaly Detected!")
+                    else:
+                         st.success("No Anomaly Detected")
 
-                st.write("Raw Predictions (Probabilities per class):")
-                # Display raw probabilities only if CLASS_NAMES match model output shape
-                if len(CLASS_NAMES) == predictions.shape[-1]:
-                    st.json({CLASS_NAMES[i]: float(predictions[0][i]) for i in range(len(CLASS_NAMES))})
-                else:
-                    st.write("Cannot display raw probabilities with mismatched CLASS_NAMES.")
+                    st.write("Raw Predictions (Probabilities per class):")
+                    # Display raw probabilities only if CLASS_NAMES match model output shape
+                    if len(CLASS_NAMES) == predictions.shape[-1]:
+                        st.json({CLASS_NAMES[i]: float(predictions[0][i]) for i in range(len(CLASS_NAMES))})
+                    else:
+                        st.write("Cannot display raw probabilities with mismatched CLASS_NAMES.")
 
 
             except Exception as e:
@@ -180,7 +186,7 @@ if model is not None:
                 # Interpret prediction
                 predicted_class, predicted_probability = interpret_tm_prediction(predictions, CLASS_NAMES)
 
-                # Display prediction on the frame
+                # Display prediction on the frame (overlaying text on the video feed)
                 display_img = img # Use original frame for display
                 score_text = f"Class: {predicted_class} ({predicted_probability:.2f})"
                 # Change color based on prediction (e.g., Green for Good, Red for Anomaly classes)
@@ -190,7 +196,8 @@ if model is not None:
 
                 return display_img
 
-        # Start the webcam streamer
+        # Removed the problematic st.sidebar.text_elements check
+        # The warning for default CLASS_NAMES is handled above the option selection
         if model is not None:
              webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
              st.info("Select 'Webcam' from the sidebar to use your camera.")
