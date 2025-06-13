@@ -4,3 +4,4 @@ opencv-python
 Pillow
 streamlit-webrtc
 tensorflowjs
+pandas
