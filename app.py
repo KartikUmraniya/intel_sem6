@@ -87,15 +87,23 @@ if model is not None:
     def interpret_tm_prediction(predictions, class_names):
         """Interprets the predictions from the Teachable Machine model."""
         # Assuming predictions is a list of probabilities, one for each class
+        if predictions is None or len(predictions) == 0:
+            return "N/A", 0.0 # Handle empty predictions
+
+        # Ensure the number of class names matches the number of predictions
+        if len(class_names) != predictions.shape[-1]:
+             st.warning(f"Mismatch between number of defined CLASS_NAMES ({len(class_names)}) and model outputs ({predictions.shape[-1]}). Please update CLASS_NAMES.")
+             # Attempt to provide a generic interpretation based on model output shape
+             predicted_class_index = np.argmax(predictions)
+             predicted_probability = predictions[0][predicted_class_index]
+             return f"Class {predicted_class_index}", predicted_probability
+
+
         # Find the class with the highest probability
         predicted_class_index = np.argmax(predictions)
         predicted_probability = predictions[0][predicted_class_index]
         predicted_class_name = class_names[predicted_class_index]
 
-        # For anomaly detection, you'd interpret based on the probabilities of your anomaly classes
-        # For example, if 'Good' is class 0 and other classes are anomalies:
-        # Anomaly score could be 1 - probability of 'Good'
-        # Or, simply report the predicted class and its probability.
 
         return predicted_class_name, predicted_probability
 
@@ -105,7 +113,9 @@ if model is not None:
     # Replace with your actual class names from Teachable Machine
     CLASS_NAMES = ['Class 1 (Good)', 'Class 2 (Anomaly Type 1)', 'Class 3 (Anomaly Type 2)'] # <<< UPDATE THIS LIST
 
-    st.sidebar.write("Please update the CLASS_NAMES list in the code with your actual class names from Teachable Machine.")
+    # Check if the user has updated the default class names and display a warning if not
+    if CLASS_NAMES == ['Class 1 (Good)', 'Class 2 (Anomaly Type 1)', 'Class 3 (Anomaly Type 2)']:
+         st.sidebar.warning("Please update the CLASS_NAMES list in the code with your actual class names from Teachable Machine.")
 
 
     if option == "Upload Image":
@@ -132,13 +142,18 @@ if model is not None:
 
                 # You can add conditional logic here based on predicted_class_name
                 # For example, if predicted_class_name is one of your anomaly classes:
-                if predicted_class in CLASS_NAMES[1:]: # Assuming Class 1 is 'Good'
+                # This logic assumes 'Good' is the first class name in CLASS_NAMES
+                if predicted_class != CLASS_NAMES[0]: # Assuming first class is 'Good'
                      st.error("Anomaly Detected!")
                 else:
                      st.success("No Anomaly Detected")
 
                 st.write("Raw Predictions (Probabilities per class):")
-                st.json({CLASS_NAMES[i]: float(predictions[0][i]) for i in range(len(CLASS_NAMES))})
+                # Display raw probabilities only if CLASS_NAMES match model output shape
+                if len(CLASS_NAMES) == predictions.shape[-1]:
+                    st.json({CLASS_NAMES[i]: float(predictions[0][i]) for i in range(len(CLASS_NAMES))})
+                else:
+                    st.write("Cannot display raw probabilities with mismatched CLASS_NAMES.")
 
 
             except Exception as e:
@@ -169,20 +184,18 @@ if model is not None:
                 display_img = img # Use original frame for display
                 score_text = f"Class: {predicted_class} ({predicted_probability:.2f})"
                 # Change color based on prediction (e.g., Green for Good, Red for Anomaly classes)
+                # This logic assumes 'Good' is the first class name in CLASS_NAMES
                 color = (0, 255, 0) if predicted_class == CLASS_NAMES[0] else (0, 0, 255) # Assuming first class is 'Good'
                 cv2.putText(display_img, score_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
                 return display_img
 
-        # Ensure CLASS_NAMES are updated before running webcam
-        if 'Please update the CLASS_NAMES' in st.sidebar.text_elements: # Simple check if user updated class names
-             st.warning("Please update the CLASS_NAMES list in the code and redeploy before using the webcam.")
-        elif model is not None:
+        # Start the webcam streamer
+        if model is not None:
              webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
              st.info("Select 'Webcam' from the sidebar to use your camera.")
         else:
-             st.warning("Model could not be loaded. Please check the error message above.")
-
+             st.warning("Model could not be loaded. Cannot start webcam.")
 
 else:
     st.warning("Model could not be loaded. Please check the error message above.")
