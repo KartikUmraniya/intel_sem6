@@ -1,8 +1,8 @@
 streamlit
 streamlit-webrtc
 opencv-python-headless
-tensorflow<2.17
+tensorflow-cpu<2.17
+ml-dtypes
 numpy
 pandas
 Pillow
-ml-dtypes
