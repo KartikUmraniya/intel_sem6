@@ -1,7 +1,7 @@
 streamlit
-tensorflow<2.17
-opencv-python
-Pillow
 streamlit-webrtc
-tensorflowjs
+opencv-python-headless
+tensorflow<2.17
+numpy
 pandas
+Pillow
